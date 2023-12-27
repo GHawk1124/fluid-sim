@@ -5,9 +5,13 @@ project(fluid-sim VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
 
 # Find the SDL2 library
 find_package(SDL2 REQUIRED)
+find_package(SDL2_gfx REQUIRED)
 
 # ImGui
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
@@ -33,4 +37,4 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -s") # -O3 for optimizations, -s for stripping
 add_executable(fluid-sim ${SOURCES})
 
 # Link SDL2 to your executable
-target_link_libraries(fluid-sim imgui ${SDL2_LIBRARIES})
+target_link_libraries(fluid-sim imgui ${SDL2_LIBRARIES} ${SDL2_GFX_LIBRARIES})

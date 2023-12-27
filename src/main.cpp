@@ -1,4 +1,4 @@
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_sdlrenderer2.h>
@@ -6,66 +6,9 @@
 #include <math.h>
 #include <vector>
 
-const int WINDOW_WIDTH = 800;
-const int WINDOW_HEIGHT = 600;
-const int CIRCLE_RADIUS = 10;
-const int BARRIER_RADIUS = (WINDOW_HEIGHT * 4) / 5 / 2;
-const int BARRIER_THICKNESS = 10;
-
-struct Circle {
-  float x, y;   // Position
-  float vx, vy; // Velocity
-};
-
-void DrawCircle(SDL_Renderer *renderer, int centerX, int centerY, int radius,
-                SDL_Color color) {
-  SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-  for (int w = 0; w < radius * 2; w++) {
-    for (int h = 0; h < radius * 2; h++) {
-      int dx = radius - w; // Distance from center to pixel
-      int dy = radius - h;
-      if ((dx * dx + dy * dy) <= (radius * radius)) {
-        SDL_RenderDrawPoint(renderer, centerX + dx, centerY + dy);
-      }
-    }
-  }
-}
-
-void UpdateCircle(Circle &circle, float deltaTime) {
-  // Update position
-  circle.x += circle.vx * deltaTime;
-  circle.y += circle.vy * deltaTime;
-
-  // Wall collision
-  if (circle.x - CIRCLE_RADIUS < 0 || circle.x + CIRCLE_RADIUS > WINDOW_WIDTH) {
-    circle.vx *= -1;
-  }
-  if (circle.y - CIRCLE_RADIUS < 0 ||
-      circle.y + CIRCLE_RADIUS > WINDOW_HEIGHT) {
-    circle.vy *= -1;
-  }
-
-  // Barrier collision
-  float dx = circle.x - WINDOW_WIDTH / 2;
-  float dy = circle.y - WINDOW_HEIGHT / 2;
-  float distance = sqrt(dx * dx + dy * dy);
-  if (distance + CIRCLE_RADIUS > BARRIER_RADIUS) {
-    // Reflect the velocity
-    circle.vx *= -1;
-    circle.vy *= -1;
-  }
-}
-
-void CheckCollision(Circle &circle1, Circle &circle2) {
-  float dx = circle2.x - circle1.x;
-  float dy = circle2.y - circle1.y;
-  float distance = sqrt(dx * dx + dy * dy);
-  if (distance < 2 * CIRCLE_RADIUS) {
-    // Elastic collision response
-    std::swap(circle1.vx, circle2.vx);
-    std::swap(circle1.vy, circle2.vy);
-  }
-}
+#include "color_ramp.h"
+#include "constants.h"
+#include "particle.h"
 
 int main(int argc, char *argv[]) {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -102,22 +45,29 @@ int main(int argc, char *argv[]) {
   ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
   ImGui_ImplSDLRenderer2_Init(renderer);
 
-  std::vector<Circle> circles = {
-      {WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 100.0f, 60.0f},
-      {WINDOW_WIDTH / 3, WINDOW_HEIGHT / 3, 80.0f, 100.0f},
-      {2 * WINDOW_WIDTH / 3, WINDOW_HEIGHT / 3, 60.0f, 80.0f},
-      {WINDOW_WIDTH / 3, 2 * WINDOW_HEIGHT / 3, 100.0f, 60.0f},
-      {2 * WINDOW_WIDTH / 3, 2 * WINDOW_HEIGHT / 3, 80.0f, 100.0f}};
+  std::vector<Circle> circles =
+      generate_random_circles(INITIAL_CIRCLE_COUNT, WINDOW_WIDTH, WINDOW_HEIGHT,
+                              BARRIER_RADIUS, CIRCLE_RADIUS);
 
   bool quit = false;
   SDL_Event event;
-  Uint32 frameStart, frameTime;
-  const int TARGET_FPS = 60;
-  const int FRAME_DELAY = 1000 / TARGET_FPS;
+  Uint32 lastFrame = SDL_GetTicks(), currentFrame;
   float deltaTime = 0.0f;
 
+  const int TARGET_FPS = 120;
+  const int FRAME_DELAY = 1000 / TARGET_FPS;
+  int frameTime = 0;
+
+  static float posX = static_cast<float>(WINDOW_WIDTH) / 2;
+  static float posY = static_cast<float>(WINDOW_HEIGHT) / 2;
+  static float velX = 0.0f;
+  static float velY = 0.0f;
+  static float radius = 10.0f;
+
   while (!quit) {
-    frameStart = SDL_GetTicks();
+    currentFrame = SDL_GetTicks();
+    deltaTime = (currentFrame - lastFrame) / 1000.0f;
+    lastFrame = currentFrame;
 
     while (SDL_PollEvent(&event)) {
       ImGui_ImplSDL2_ProcessEvent(&event);
@@ -126,44 +76,106 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    ImGui_ImplSDL2_NewFrame(window);
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui::NewFrame();
-
-    // ImGui UI
-    ImGui::Begin("Control Panel");
-    // Add ImGui widgets here.
-    ImGui::End();
-
-    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
-    SDL_RenderClear(renderer);
-
-    // Draw barrier circle
-    SDL_Color barrierColor = {0, 0, 0, 255};
-    for (int r = BARRIER_RADIUS - BARRIER_THICKNESS; r <= BARRIER_RADIUS; ++r) {
-      DrawCircle(renderer, WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, r,
-                 barrierColor);
-    }
-
-    // Update and draw moving circles
-    SDL_Color circleColor = {255, 0, 0, 255};
+    // Simulation update
     for (size_t i = 0; i < circles.size(); ++i) {
-      UpdateCircle(circles[i], deltaTime);
+      UpdateCircle(circles[i], deltaTime, WINDOW_WIDTH, WINDOW_HEIGHT,
+                   BARRIER_RADIUS);
       for (size_t j = i + 1; j < circles.size(); ++j) {
         CheckCollision(circles[i], circles[j]);
       }
-      DrawCircle(renderer, static_cast<int>(circles[i].x),
-                 static_cast<int>(circles[i].y), CIRCLE_RADIUS, circleColor);
     }
 
-    ImGui::Render();
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
-    SDL_RenderPresent(renderer);
+    frameTime += SDL_GetTicks() - currentFrame;
 
-    frameTime = SDL_GetTicks() - frameStart;
-    deltaTime = frameTime / 1000.0f; // Convert to seconds
-    if (frameTime < FRAME_DELAY) {
-      SDL_Delay(FRAME_DELAY - frameTime);
+    if (frameTime >= FRAME_DELAY) {
+      // Rendering
+      ImGui_ImplSDL2_NewFrame(window);
+      ImGui_ImplSDLRenderer2_NewFrame();
+      ImGui::NewFrame();
+
+      // ImGui UI
+      ImGui::Begin("Control Panel");
+      // Add ImGui widgets here.
+      if (ImGui::Button("Delete All Circles")) {
+        circles.clear(); // Clears all elements from the circles vector
+      }
+
+      // Labeled input fields for new particle properties
+      ImGui::Text("New Particle Properties");
+      ImGui::SliderFloat("Position X", &posX, 0.0f, WINDOW_WIDTH);
+      ImGui::SliderFloat("Position Y", &posY, -100.0f, WINDOW_HEIGHT);
+      ImGui::SliderFloat("Velocity X", &velX, -100.0f, 100.0f);
+      ImGui::SliderFloat("Velocity Y", &velY, -100.0f, 100.0f);
+      ImGui::SliderFloat("Radius", &radius, 1.0f, 30.0f);
+
+      // Button to add the particle
+      if (ImGui::Button("Add Particle")) {
+        Circle newCircle(posX, posY, velX,
+                         velY, radius);       // Creating a new Circle instance
+        circles.push_back(newCircle); // Add the new particle to the vector
+      }
+
+      ImGui::End();
+
+      float averageVelocity = 0.0f;
+      if (!circles.empty()) {
+        float totalVelocity = 0.0f;
+        for (const Circle &circle : circles) {
+          totalVelocity += sqrt(circle.vx * circle.vx + circle.vy * circle.vy);
+        }
+        averageVelocity = totalVelocity / circles.size();
+      }
+
+      ImGui::Begin("Particle Information");
+
+      ImGui::Text("Average Particle Velocity: %.2f", averageVelocity);
+
+      // Assuming you have an ImGui plot function available
+      static std::vector<float> velocities;
+      velocities.push_back(averageVelocity); // Store the average velocity
+      if (velocities.size() > 50) { // Limit the number of displayed points
+        velocities.erase(velocities.begin());
+      }
+      ImGui::PlotLines("Velocity", velocities.data(), velocities.size());
+
+      ImGui::End();
+
+      SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+      SDL_RenderClear(renderer);
+
+      // Draw barrier rectangle
+      SDL_Color barrierColor = {0, 0, 0, 255};
+      SDL_SetRenderDrawColor(renderer, barrierColor.r, barrierColor.g,
+                             barrierColor.b, barrierColor.a);
+
+      SDL_Rect barrierRect;
+      barrierRect.x = WINDOW_WIDTH / 2 - BARRIER_RADIUS / 2;
+      barrierRect.y = WINDOW_HEIGHT / 2 - BARRIER_RADIUS / 2;
+      barrierRect.w = BARRIER_RADIUS; // Width of the rectangle
+      barrierRect.h = BARRIER_RADIUS; // Height of the rectangle
+
+      SDL_RenderDrawRect(renderer, &barrierRect);
+
+      // Update and draw moving circles
+      float maxVelocity =
+          100.0f; // Adjust this based on your circles' velocity range
+      for (size_t i = 0; i < circles.size(); ++i) {
+        UpdateCircle(circles[i], deltaTime, WINDOW_WIDTH, WINDOW_HEIGHT,
+                     BARRIER_RADIUS);
+        for (size_t j = i + 1; j < circles.size(); ++j) {
+          CheckCollision(circles[i], circles[j]);
+        }
+
+        SDL_Color circleColor =
+            velocityToColor(circles[i].vx, circles[i].vy, maxVelocity);
+        DrawCircle(renderer, circles[i], circleColor);
+      }
+
+      ImGui::Render();
+      ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
+      SDL_RenderPresent(renderer);
+
+      frameTime = 0; // Reset frame time
     }
   }
 
