@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
   }
 
   SDL_Window *window = SDL_CreateWindow(
-      "SDL Circle with ImGui", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+      "SDL Particle with ImGui", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
       WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
   if (!window) {
     std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError()
@@ -45,9 +45,9 @@ int main(int argc, char *argv[]) {
   ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
   ImGui_ImplSDLRenderer2_Init(renderer);
 
-  std::vector<Circle> circles =
-      generate_random_circles(INITIAL_CIRCLE_COUNT, WINDOW_WIDTH, WINDOW_HEIGHT,
-                              BARRIER_RADIUS, CIRCLE_RADIUS);
+  std::vector<Particle> particles =
+      generate_random_particles(INITIAL_PARTICLE_COUNT, WINDOW_WIDTH,
+                                WINDOW_HEIGHT, BARRIER_RADIUS, PARTICLE_RADIUS);
 
   bool quit = false;
   SDL_Event event;
@@ -62,6 +62,7 @@ int main(int argc, char *argv[]) {
   static float posY = static_cast<float>(WINDOW_HEIGHT) / 2;
   static float velX = 0.0f;
   static float velY = 0.0f;
+  static float temperature = 0.0f;
   static float radius = 10.0f;
 
   while (!quit) {
@@ -77,11 +78,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Simulation update
-    for (size_t i = 0; i < circles.size(); ++i) {
-      UpdateCircle(circles[i], deltaTime, WINDOW_WIDTH, WINDOW_HEIGHT,
-                   BARRIER_RADIUS);
-      for (size_t j = i + 1; j < circles.size(); ++j) {
-        CheckCollision(circles[i], circles[j]);
+    for (size_t i = 0; i < particles.size(); ++i) {
+      UpdateParticle(particles[i], deltaTime, WINDOW_WIDTH, WINDOW_HEIGHT,
+                     BARRIER_RADIUS);
+      checkBarrierCollision(particles[i], WINDOW_WIDTH, WINDOW_HEIGHT,
+                            BARRIER_RADIUS);
+      for (size_t j = i + 1; j < particles.size(); ++j) {
+        CheckCollision(particles[i], particles[j]);
       }
     }
 
@@ -96,8 +99,8 @@ int main(int argc, char *argv[]) {
       // ImGui UI
       ImGui::Begin("Control Panel");
       // Add ImGui widgets here.
-      if (ImGui::Button("Delete All Circles")) {
-        circles.clear(); // Clears all elements from the circles vector
+      if (ImGui::Button("Delete All Particles")) {
+        particles.clear(); // Clears all elements from the particles vector
       }
 
       // Labeled input fields for new particle properties
@@ -106,24 +109,26 @@ int main(int argc, char *argv[]) {
       ImGui::SliderFloat("Position Y", &posY, -100.0f, WINDOW_HEIGHT);
       ImGui::SliderFloat("Velocity X", &velX, -100.0f, 100.0f);
       ImGui::SliderFloat("Velocity Y", &velY, -100.0f, 100.0f);
+      ImGui::SliderFloat("Temperature", &temperature, 1.0f, 30.0f);
       ImGui::SliderFloat("Radius", &radius, 1.0f, 30.0f);
 
       // Button to add the particle
       if (ImGui::Button("Add Particle")) {
-        Circle newCircle(posX, posY, velX,
-                         velY, radius);       // Creating a new Circle instance
-        circles.push_back(newCircle); // Add the new particle to the vector
+        Particle newParticle(posX, posY, velX, velY,
+                             temperature, radius);     // Creating a new Particle instance
+        particles.push_back(newParticle); // Add the new particle to the vector
       }
 
       ImGui::End();
 
       float averageVelocity = 0.0f;
-      if (!circles.empty()) {
+      if (!particles.empty()) {
         float totalVelocity = 0.0f;
-        for (const Circle &circle : circles) {
-          totalVelocity += sqrt(circle.vx * circle.vx + circle.vy * circle.vy);
+        for (const Particle &particle : particles) {
+          totalVelocity +=
+              sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
         }
-        averageVelocity = totalVelocity / circles.size();
+        averageVelocity = totalVelocity / particles.size();
       }
 
       ImGui::Begin("Particle Information");
@@ -156,19 +161,19 @@ int main(int argc, char *argv[]) {
 
       SDL_RenderDrawRect(renderer, &barrierRect);
 
-      // Update and draw moving circles
+      // Update and draw moving particles
       float maxVelocity =
-          100.0f; // Adjust this based on your circles' velocity range
-      for (size_t i = 0; i < circles.size(); ++i) {
-        UpdateCircle(circles[i], deltaTime, WINDOW_WIDTH, WINDOW_HEIGHT,
-                     BARRIER_RADIUS);
-        for (size_t j = i + 1; j < circles.size(); ++j) {
-          CheckCollision(circles[i], circles[j]);
+          100.0f; // Adjust this based on your particles' velocity range
+      for (size_t i = 0; i < particles.size(); ++i) {
+        UpdateParticle(particles[i], deltaTime, WINDOW_WIDTH, WINDOW_HEIGHT,
+                       BARRIER_RADIUS);
+        for (size_t j = i + 1; j < particles.size(); ++j) {
+          CheckCollision(particles[i], particles[j]);
         }
-
-        SDL_Color circleColor =
-            velocityToColor(circles[i].vx, circles[i].vy, maxVelocity);
-        DrawCircle(renderer, circles[i], circleColor);
+        calculateParticleVelocity(particles[i]);
+        SDL_Color particleColor =
+            velocityToColor(particles[i].speed, maxVelocity);
+        DrawParticle(renderer, particles[i], particleColor);
       }
 
       ImGui::Render();

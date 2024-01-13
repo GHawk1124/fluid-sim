@@ -3,9 +3,8 @@
 #include <algorithm>
 
 // Function to map velocity to color
-SDL_Color velocityToColor(float vx, float vy, float maxVelocity) {
-  float velocity = sqrt(vx * vx + vy * vy);
-  float ratio = velocity / maxVelocity;
+SDL_Color velocityToColor(float speed, float maxVelocity) {
+  float ratio = speed / maxVelocity;
   ratio = std::min(ratio, 1.0f); // Ensure the ratio is between 0 and 1
 
   Uint8 red = static_cast<Uint8>(255 * ratio);

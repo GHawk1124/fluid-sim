@@ -3,6 +3,6 @@
 
 #include <SDL.h>
 
-SDL_Color velocityToColor(float vx, float vy, float maxVelocity);
+SDL_Color velocityToColor(float speed, float maxVelocity);
 
 #endif // COLOR_RAMP_H

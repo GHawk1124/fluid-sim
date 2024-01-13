@@ -6,24 +6,32 @@
 #include <random>
 #include <vector>
 
-struct Circle {
+struct Particle {
   float x, y;   // Position
   float vx, vy; // Velocity
+  float speed;
   float radius;
+  float temperature;
 
-  Circle(float x, float y, float vx, float vy, float radius=CIRCLE_RADIUS) : x(x), y(y), vx(vx), vy(vy),radius(radius) {}
+  Particle(float x, float y, float vx, float vy, float temperature, float radius = PARTICLE_RADIUS)
+      : x(x), y(y), vx(vx), vy(vy), temperature(temperature), radius(radius) {}
 };
 
-void DrawCircle(SDL_Renderer *renderer, Circle& circle, SDL_Color color);
+void calculateParticleVelocity(Particle &particle);
 
-void UpdateCircle(Circle &circle, float deltaTime, int window_width,
+void DrawParticle(SDL_Renderer *renderer, Particle &particle, SDL_Color color);
+
+void UpdateParticle(Particle &particle, float deltaTime, int window_width,
                   int window_height, int barrier_radius);
 
-void CheckCollision(Circle &circle1, Circle &circle2);
+void checkBarrierCollision(Particle &particle, int window_width, int window_height,
+                           int barrier_radius);
 
-std::vector<Circle> generate_random_circles(int count, int window_width,
+void CheckCollision(Particle &particle1, Particle &particle2);
+
+std::vector<Particle> generate_random_particles(int count, int window_width,
                                             int window_height,
                                             int barrier_radius,
-                                            int circle_radius);
+                                            int particle_radius);
 
 #endif // PARTICLE_H
